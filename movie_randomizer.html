@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>REEL — Movie Randomizer</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=Crimson+Pro:ital,wght@0,300;0,600;1,300&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --surface: #111111;
+      --border: #222222;
+      --gold: #c9a84c;
+      --gold-dim: #7a6328;
+      --white: #f0ece3;
+      --muted: #555555;
+      --red: #c0392b;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--white);
+      font-family: 'DM Mono', monospace;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow-x: hidden;
+    }
+
+    /* Film grain overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 999;
+      opacity: 0.4;
+    }
+
+    /* Filmstrip top bar */
+    .filmstrip {
+      width: 100%;
+      height: 38px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 0;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .hole {
+      width: 22px;
+      height: 16px;
+      background: var(--bg);
+      border: 1px solid #1e1e1e;
+      border-radius: 3px;
+      flex-shrink: 0;
+      margin: 0 6px;
+    }
+
+    header {
+      width: 100%;
+      max-width: 900px;
+      padding: 60px 40px 0;
+      display: flex;
+      align-items: baseline;
+      gap: 20px;
+    }
+
+    header h1 {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(80px, 14vw, 140px);
+      letter-spacing: 0.05em;
+      color: var(--white);
+      line-height: 0.9;
+    }
+
+    header .tagline {
+      font-family: 'Crimson Pro', serif;
+      font-style: italic;
+      font-size: 18px;
+      color: var(--gold);
+      margin-bottom: 8px;
+      font-weight: 300;
+    }
+
+    .controls {
+      width: 100%;
+      max-width: 900px;
+      padding: 30px 40px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .filter-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    label {
+      font-size: 10px;
+      letter-spacing: 0.15em;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    select {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--white);
+      font-family: 'DM Mono', monospace;
+      font-size: 13px;
+      padding: 10px 16px;
+      border-radius: 2px;
+      appearance: none;
+      cursor: pointer;
+      min-width: 150px;
+      transition: border-color 0.2s;
+    }
+
+    select:hover, select:focus {
+      border-color: var(--gold-dim);
+      outline: none;
+    }
+
+    .spin-btn {
+      margin-left: auto;
+      background: var(--gold);
+      color: #0a0a0a;
+      border: none;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 22px;
+      letter-spacing: 0.12em;
+      padding: 14px 40px;
+      border-radius: 2px;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .spin-btn::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: white;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+
+    .spin-btn:hover { background: #dbb95a; transform: translateY(-1px); }
+    .spin-btn:active { transform: translateY(0); }
+    .spin-btn:disabled { background: var(--muted); cursor: default; transform: none; }
+
+    /* Card area */
+    .stage {
+      width: 100%;
+      max-width: 900px;
+      padding: 0 40px 80px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      min-height: 340px;
+      overflow: hidden;
+      position: relative;
+      animation: cardIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+
+    @keyframes cardIn {
+      from { opacity: 0; transform: translateY(24px) scale(0.98); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .card-poster {
+      background: #1a1a1a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-right: 1px solid var(--border);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card-poster img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .poster-placeholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      color: var(--muted);
+    }
+
+    .poster-placeholder svg { opacity: 0.3; }
+
+    .card-body {
+      padding: 36px 40px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .card-meta {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .badge {
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      border: 1px solid var(--gold-dim);
+      color: var(--gold);
+      padding: 4px 10px;
+      border-radius: 1px;
+    }
+
+    .year {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .card-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(36px, 5vw, 56px);
+      letter-spacing: 0.04em;
+      line-height: 1;
+      color: var(--white);
+    }
+
+    .card-director {
+      font-family: 'Crimson Pro', serif;
+      font-style: italic;
+      font-size: 16px;
+      color: var(--gold);
+      font-weight: 300;
+    }
+
+    .card-desc {
+      font-family: 'Crimson Pro', serif;
+      font-size: 17px;
+      line-height: 1.65;
+      color: #bbb8b0;
+      font-weight: 300;
+      flex: 1;
+    }
+
+    .card-footer {
+      display: flex;
+      gap: 24px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+    }
+
+    .card-footer span b {
+      color: var(--white);
+      font-weight: 500;
+    }
+
+    /* Rating stars */
+    .stars {
+      color: var(--gold);
+      font-size: 14px;
+    }
+
+    /* Empty state */
+    .empty {
+      border: 1px dashed var(--border);
+      height: 280px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      color: var(--muted);
+    }
+
+    .empty .cue {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 42px;
+      letter-spacing: 0.08em;
+      color: #1e1e1e;
+    }
+
+    .empty p {
+      font-size: 12px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    /* History strip */
+    .history-label {
+      width: 100%;
+      max-width: 900px;
+      padding: 0 40px 12px;
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .history {
+      width: 100%;
+      max-width: 900px;
+      padding: 0 40px 40px;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .hist-pill {
+      font-size: 11px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 6px 14px;
+      border-radius: 1px;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+      font-family: 'Crimson Pro', serif;
+      font-style: italic;
+    }
+
+    .hist-pill:hover {
+      border-color: var(--gold-dim);
+      color: var(--white);
+    }
+
+    /* Spinning animation on button */
+    @keyframes spin-reel {
+      0%   { content: '⟳ SPIN'; }
+      100% { content: '⟳ SPIN'; }
+    }
+
+    .rolling { animation: rolling 0.05s steps(1) infinite; }
+
+    @keyframes rolling {
+      0%  { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    @media (max-width: 620px) {
+      header { padding: 40px 20px 0; }
+      .controls { padding: 20px 20px; }
+      .stage { padding: 0 20px 60px; }
+      .history-label, .history { padding-left: 20px; padding-right: 20px; }
+      .card { grid-template-columns: 1fr; }
+      .card-poster { height: 200px; border-right: none; border-bottom: 1px solid var(--border); }
+      .spin-btn { margin-left: 0; width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="filmstrip" id="strip"></div>
+
+<header>
+  <div>
+    <h1>REEL</h1>
+  </div>
+  <div style="align-self:flex-end; padding-bottom: 14px;">
+    <div class="tagline">your next watch, decided by fate</div>
+  </div>
+</header>
+
+<div class="controls">
+  <div class="filter-group">
+    <label>Genre</label>
+    <select id="genreFilter">
+      <option value="all">All Genres</option>
+      <option value="Drama">Drama</option>
+      <option value="Thriller">Thriller</option>
+      <option value="Sci-Fi">Sci-Fi</option>
+      <option value="Comedy">Comedy</option>
+      <option value="Horror">Horror</option>
+      <option value="Action">Action</option>
+      <option value="Romance">Romance</option>
+      <option value="Animation">Animation</option>
+      <option value="Crime">Crime</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <label>Era</label>
+    <select id="eraFilter">
+      <option value="all">Any Era</option>
+      <option value="classic">Classic (before 1980)</option>
+      <option value="80s90s">80s & 90s</option>
+      <option value="2000s">2000s</option>
+      <option value="modern">Modern (2010+)</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <label>Mood</label>
+    <select id="moodFilter">
+      <option value="all">Any Mood</option>
+      <option value="feel-good">Feel-Good</option>
+      <option value="mind-bending">Mind-Bending</option>
+      <option value="dark">Dark & Gritty</option>
+      <option value="epic">Epic & Grand</option>
+      <option value="quirky">Quirky & Unique</option>
+    </select>
+  </div>
+  <button class="spin-btn" id="spinBtn" onclick="pickMovie()">▶ SPIN</button>
+</div>
+
+<div class="stage">
+  <div class="empty" id="emptyState">
+    <div class="cue">— — —</div>
+    <p>Press spin to get your pick</p>
+  </div>
+  <div id="cardWrap" style="display:none;"></div>
+</div>
+
+<div class="history-label" id="histLabel" style="display:none;">Previously shown</div>
+<div class="history" id="historyWrap"></div>
+
+<script>
+const MOVIES = [
+  { title:"2001: A Space Odyssey", director:"Stanley Kubrick", year:1968, genre:"Sci-Fi", mood:"mind-bending", desc:"A voyage from prehistoric Earth to the far reaches of space, where a mysterious monolith pushes humanity to the next stage of evolution.", runtime:"149 min", rating:5 },
+  { title:"Parasite", director:"Bong Joon-ho", year:2019, genre:"Thriller", mood:"dark", desc:"A poor family schemes to become employed by a wealthy household, setting off a chain of unexpected and darkly comic events.", runtime:"132 min", rating:5 },
+  { title:"Spirited Away", director:"Hayao Miyazaki", year:2001, genre:"Animation", mood:"epic", desc:"A young girl stumbles into a spirit world and must work in a bathhouse to find a way to free herself and her transformed parents.", runtime:"125 min", rating:5 },
+  { title:"Blade Runner 2049", director:"Denis Villeneuve", year:2017, genre:"Sci-Fi", mood:"mind-bending", desc:"A replicant blade runner unearths a long-buried secret that could unravel what remains of society — and rewrites his own existence.", runtime:"164 min", rating:4 },
+  { title:"The Grand Budapest Hotel", director:"Wes Anderson", year:2014, genre:"Comedy", mood:"quirky", desc:"The adventures of a legendary concierge and his protégé through a fading European empire wrapped in pastel nostalgia.", runtime:"99 min", rating:4 },
+  { title:"Mulholland Drive", director:"David Lynch", year:2001, genre:"Thriller", mood:"mind-bending", desc:"An aspiring actress and an amnesiac woman spin deeper into a disorienting mystery lurking beneath Hollywood's golden surface.", runtime:"147 min", rating:5 },
+  { title:"Mad Max: Fury Road", director:"George Miller", year:2015, genre:"Action", mood:"epic", desc:"A woman rebels against a tyrannical ruler in a post-apocalyptic wasteland, aided by a group of female prisoners and a drifter named Max.", runtime:"120 min", rating:5 },
+  { title:"Eternal Sunshine of the Spotless Mind", director:"Michel Gondry", year:2004, genre:"Romance", mood:"mind-bending", desc:"After a painful breakup, a couple undergoes a medical procedure to erase memories of each other — but love proves harder to delete.", runtime:"108 min", rating:5 },
+  { title:"Goodfellas", director:"Martin Scorsese", year:1990, genre:"Crime", mood:"dark", desc:"The rise and fall of Henry Hill, a mid-level New York mobster, told with blistering energy and razor-sharp detail.", runtime:"146 min", rating:5 },
+  { title:"The Shining", director:"Stanley Kubrick", year:1980, genre:"Horror", mood:"dark", desc:"A family heads to an isolated hotel for the winter where a sinister presence drives the father into a murderous rage.", runtime:"146 min", rating:5 },
+  { title:"Whiplash", director:"Damien Chazelle", year:2014, genre:"Drama", mood:"dark", desc:"A young drummer pushes himself to the breaking point under the brutal tutelage of a terrifying jazz conservatory instructor.", runtime:"107 min", rating:5 },
+  { title:"Amelie", director:"Jean-Pierre Jeunet", year:2001, genre:"Romance", mood:"feel-good", desc:"A shy Parisian waitress secretly orchestrates the happiness of strangers while wrestling with her own longing for connection.", runtime:"122 min", rating:5 },
+  { title:"Apocalypse Now", director:"Francis Ford Coppola", year:1979, genre:"Drama", mood:"dark", desc:"A soldier ventures deep into the jungles of Vietnam to find — and terminate — a once-decorated colonel who has descended into madness.", runtime:"153 min", rating:5 },
+  { title:"The Truman Show", director:"Peter Weir", year:1998, genre:"Drama", mood:"mind-bending", desc:"A man living in a picture-perfect town slowly realizes his entire life has been the world's most watched TV show.", runtime:"103 min", rating:4 },
+  { title:"Everything Everywhere All at Once", director:"Daniels", year:2022, genre:"Sci-Fi", mood:"quirky", desc:"A middle-aged laundromat owner is swept into an epic multiverse adventure and must channel her newfound abilities to defeat a powerful enemy.", runtime:"139 min", rating:5 },
+  { title:"Oldboy", director:"Park Chan-wook", year:2003, genre:"Thriller", mood:"dark", desc:"After being imprisoned for 15 years without explanation, a man is abruptly freed and given five days to discover who his captor was — and why.", runtime:"120 min", rating:5 },
+  { title:"Princess Mononoke", director:"Hayao Miyazaki", year:1997, genre:"Animation", mood:"epic", desc:"A young prince becomes entangled in the struggle between ancient forest gods and the humans consuming their land.", runtime:"134 min", rating:5 },
+  { title:"Fargo", director:"Joel Coen", year:1996, genre:"Crime", mood:"quirky", desc:"A bumbling car salesman arranges his wife's kidnapping for ransom money, only to trigger a bloody chain of events investigated by a very pregnant sheriff.", runtime:"98 min", rating:5 },
+  { title:"Her", director:"Spike Jonze", year:2013, genre:"Romance", mood:"feel-good", desc:"A lonely writer develops an unlikely relationship with an AI operating system, forcing him to reconsider what love and connection truly mean.", runtime:"126 min", rating:5 },
+  { title:"Pan's Labyrinth", director:"Guillermo del Toro", year:2006, genre:"Drama", mood:"epic", desc:"A child retreats into a mythical underground realm to escape the brutality of post-Civil War Spain — but the fantasy may be as dangerous as reality.", runtime:"118 min", rating:5 },
+  { title:"The Big Lebowski", director:"Joel Coen", year:1998, genre:"Comedy", mood:"quirky", desc:"A case of mistaken identity sends an affable, bowling-obsessed slacker down a spiraling rabbit hole of kidnapping and absurdity.", runtime:"117 min", rating:4 },
+  { title:"Moon", director:"Duncan Jones", year:2009, genre:"Sci-Fi", mood:"mind-bending", desc:"As a lunar miner nears the end of his three-year contract, an unexpected discovery challenges everything he knows about himself.", runtime:"97 min", rating:4 },
+  { title:"Get Out", director:"Jordan Peele", year:2017, genre:"Horror", mood:"dark", desc:"A young Black man visits his white girlfriend's family estate, where increasingly unsettling discoveries reveal a deeply sinister conspiracy.", runtime:"104 min", rating:5 },
+  { title:"Almost Famous", director:"Cameron Crowe", year:2000, genre:"Drama", mood:"feel-good", desc:"A teenage journalist goes on tour with a up-and-coming rock band in 1973, discovering music, love, and the chaos of almost making it.", runtime:"122 min", rating:5 },
+  { title:"Arrival", director:"Denis Villeneuve", year:2016, genre:"Sci-Fi", mood:"mind-bending", desc:"A linguist is recruited to communicate with alien visitors and races to decode their language before global tensions erupt into war.", runtime:"116 min", rating:5 },
+];
+
+let history = [];
+let currentMovie = null;
+
+function getEra(year) {
+  if (year < 1980) return "classic";
+  if (year < 2000) return "80s90s";
+  if (year < 2010) return "2000s";
+  return "modern";
+}
+
+function stars(n) {
+  return '★'.repeat(n) + '☆'.repeat(5 - n);
+}
+
+function renderCard(m) {
+  return `
+    <div class="card">
+      <div class="card-poster">
+        <div class="poster-placeholder">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+            <rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M17 7h5M2 17h5M17 17h5"/>
+          </svg>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span class="badge">${m.genre}</span>
+          <span class="year">${m.year}</span>
+          <span class="stars">${stars(m.rating)}</span>
+        </div>
+        <div class="card-title">${m.title}</div>
+        <div class="card-director">dir. ${m.director}</div>
+        <div class="card-desc">${m.desc}</div>
+        <div class="card-footer">
+          <span><b>${m.runtime}</b></span>
+          <span><b>${m.mood.charAt(0).toUpperCase()+m.mood.slice(1)}</b></span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function pickMovie() {
+  const genre = document.getElementById('genreFilter').value;
+  const era   = document.getElementById('eraFilter').value;
+  const mood  = document.getElementById('moodFilter').value;
+
+  let pool = MOVIES.filter(m => {
+    if (genre !== 'all' && m.genre !== genre) return false;
+    if (era   !== 'all' && getEra(m.year) !== era) return false;
+    if (mood  !== 'all' && m.mood !== mood) return false;
+    if (currentMovie && m.title === currentMovie.title) return false;
+    return true;
+  });
+
+  if (!pool.length) {
+    // Relax last-seen exclusion
+    pool = MOVIES.filter(m => {
+      if (genre !== 'all' && m.genre !== genre) return false;
+      if (era   !== 'all' && getEra(m.year) !== era) return false;
+      if (mood  !== 'all' && m.mood !== mood) return false;
+      return true;
+    });
+  }
+
+  if (!pool.length) {
+    alert('No movies match those filters. Try broadening your selection!');
+    return;
+  }
+
+  const btn = document.getElementById('spinBtn');
+  btn.disabled = true;
+  btn.textContent = '◌ LOADING';
+
+  let flips = 0;
+  const total = 14;
+  const interval = setInterval(() => {
+    const temp = pool[Math.floor(Math.random() * pool.length)];
+    document.getElementById('cardWrap').innerHTML = renderCard(temp);
+    document.getElementById('cardWrap').style.display = 'block';
+    document.getElementById('emptyState').style.display = 'none';
+    flips++;
+    if (flips >= total) {
+      clearInterval(interval);
+      const chosen = pool[Math.floor(Math.random() * pool.length)];
+      currentMovie = chosen;
+
+      if (!history.find(h => h.title === chosen.title)) {
+        history.unshift(chosen);
+        if (history.length > 8) history.pop();
+      }
+
+      document.getElementById('cardWrap').innerHTML = renderCard(chosen);
+      renderHistory();
+      btn.disabled = false;
+      btn.textContent = '▶ SPIN AGAIN';
+    }
+  }, 60);
+}
+
+function showFromHistory(title) {
+  const m = MOVIES.find(x => x.title === title);
+  if (!m) return;
+  currentMovie = m;
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('cardWrap').style.display = 'block';
+  document.getElementById('cardWrap').innerHTML = renderCard(m);
+}
+
+function renderHistory() {
+  const wrap = document.getElementById('historyWrap');
+  const lbl  = document.getElementById('histLabel');
+  if (!history.length) { wrap.innerHTML=''; lbl.style.display='none'; return; }
+  lbl.style.display = 'block';
+  wrap.innerHTML = history.map(m =>
+    `<div class="hist-pill" onclick="showFromHistory('${m.title.replace(/'/g,"\\'")}')"><i>${m.title}</i> · ${m.year}</div>`
+  ).join('');
+}
+
+// Build filmstrip holes
+const strip = document.getElementById('strip');
+for (let i = 0; i < 60; i++) {
+  const h = document.createElement('div');
+  h.className = 'hole';
+  strip.appendChild(h);
+}
+</script>
+</body>
+</html>
